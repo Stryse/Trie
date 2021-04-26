@@ -107,8 +107,7 @@ public:
     size_t size()  const noexcept { return _size;       } 
 
 
-
-
+    // TODO: return iterator
     void emplace(key_type&& key, mapped_type&& value)
     {
         key_type local_key(std::move(key));
@@ -124,12 +123,11 @@ public:
             if(branch == current_node->children.end())
             {
                 auto& next_node = current_node->children.emplace_back(std::move(keyPiece));
+                current_node = &next_node;
 
                 std::sort(current_node->children.begin(),
                           current_node->children.end(),
                           _compare);
-
-                current_node = &next_node;
             }
             else
                 current_node = std::addressof(*branch);
@@ -146,6 +144,28 @@ public:
         }
     }
 
+    const node_type* find(const key_type& key) const
+    {
+        const node_type* current_node = &_root;
+        for(size_t i = 1; i <= key.size(); ++i)
+        {
+            key_type keyPiece = key.substr(0,i);
+
+            auto branch = std::find_if(current_node->children.begin(), current_node->children.end(), 
+                                       [&](const node_type& child) { return child.key == keyPiece; });
+
+            if(branch == current_node->children.end())
+                return nullptr;
+            else
+                current_node = std::addressof(*branch);
+        }
+        return current_node;
+    }
+
+    size_t count(const key_type& key) const
+    {
+        return (find(key) == nullptr) ? 0 : 1;
+    }
 
 private:
 
