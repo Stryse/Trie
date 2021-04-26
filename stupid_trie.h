@@ -137,11 +137,15 @@ public:
 
         // TODO: return iterator
         if(!current_node->value.has_value())
+        {
             current_node->value.emplace(std::move(value));
+            ++_size;
+        }
         else
         {
         }
     }
+
 
 private:
 
