@@ -18,7 +18,6 @@ protected:
 
 public:
     /********************************* Member types *********************************/
-
     using key_type        = std::string;
     using mapped_type     = _Tp;
     using value_type      = std::pair<const std::string, _Tp>;
@@ -26,50 +25,44 @@ public:
     using key_compare     = _Compare;
     using reference       = value_type&;
     using const_reference = const value_type&;
-    // iterator
-    // const_iterator
-    // reverse_iterator
-    // const_reverse_iterator
     using node_type       = trie_node;
-    // insert_return_type
     /*********************************************************************************/
 
 protected:
     /******************************** Member classes ********************************/
-
     struct trie_node
     {
-        key_type key;
-        std::optional<mapped_type> value;
+        key_type first;
+        std::optional<mapped_type> second;
 
         std::vector<trie_node> children;
 
         trie_node() 
-            : key{}
+            : first{}
         {}
 
         trie_node(const key_type& key)
-            : key(key)
+            : first(key)
         {}
 
         trie_node(key_type&& key)
-            : key(std::move(key))
+            : first(std::move(key))
         {}
 
         trie_node(const value_type& kv_pair)
-            : key(kv_pair.first), value(kv_pair.second)
+            : first(kv_pair.first), second(kv_pair.second)
         {}
 
         trie_node(value_type&& kv_pair)
-            : key(std::move(kv_pair.first)),value(std::move(kv_pair.second))
+            : first(std::move(kv_pair.first)), second(std::move(kv_pair.second))
         {}
 
         trie_node(const key_type& key, const mapped_type& value)
-            : key(key), value(value)
+            : first(key), second(value)
         {}
 
         trie_node(key_type&& key, mapped_type&& value)
-            : key(std::move(key)), value(std::move(value))
+            : first(std::move(key)), second(std::move(value))
         {}
 
         virtual ~trie_node()                    = default;
@@ -79,23 +72,69 @@ protected:
         trie_node& operator=(trie_node&&)       = default;
     };
 
+    /********************************************************
+     * @brief Compares nodes with provided template argument
+     * key_compare in order to maintain class invariance in
+     * children vectors.
+     ********************************************************/
     struct node_compare
     {
-        key_compare compare;
-
         node_compare(const key_compare& compare)
             : compare(compare){}
 
         bool operator()(const node_type& lhs, const node_type& rhs)
         {
-            return compare(lhs.key,rhs.key);
+            return compare(lhs.first,rhs.first);
         }
+
+        key_compare compare;
     };
+
+public:
+    class iterator
+    {
+    public:
+        using iterator_category = std::forward_iterator_tag;
+        using difference_type   = std::ptrdiff_t;
+        using value_type        = node_type;
+        using pointer           = node_type*;
+        using reference         = node_type&;
+
+        iterator(node_type* ptr) : _pointed_node(ptr) {}
+        ~iterator()               = default;
+        iterator(const iterator&) = default;
+        iterator(iterator&&)      = default;
+
+        iterator& operator=(const iterator&) = default;
+        iterator& operator=(iterator&&)      = default;
+
+        reference operator* () const { return *_pointed_node; }
+        pointer   operator->() const { return  _pointed_node; }
+        
+        //iterator& operator++()
+        //{
+
+        //}
+
+        //iterator operator++(int)
+        //{
+
+        //}
+
+        friend bool operator==(const iterator& lhs, const iterator& rhs) { return lhs._pointed_node == rhs._pointed_node; }
+        friend bool operator!=(const iterator& lhs, const iterator& rhs) { return !(lhs == rhs); }
+
+    private:
+        node_type* _pointed_node;
+    };
+
+    iterator begin() const noexcept { return iterator(&_root);  }
+    iterator end()   const noexcept { return iterator(nullptr); }
 
 public:
     /********************************* Constructors **********************************/
     explicit stupid_trie(const _Compare& compare = _Compare{}) 
-        : _size{}, _leftmost{&_root}, _rightmost{&_root},_compare{compare}
+        : _size{}, _rightmost{&_root},_compare{compare}
     {}
 
     stupid_trie(const stupid_trie&) = default;
@@ -108,7 +147,7 @@ public:
 
 
     // TODO: return iterator
-    void emplace(key_type&& key, mapped_type&& value)
+    std::pair<iterator,bool> emplace(key_type&& key, mapped_type&& value)
     {
         key_type local_key(std::move(key));
         node_type* current_node = &_root;
@@ -118,7 +157,7 @@ public:
             key_type keyPiece = local_key.substr(0,i);
 
             auto branch = std::find_if(current_node->children.begin(), current_node->children.end(), 
-                                       [&](const node_type& child) { return child.key == keyPiece; });
+                                       [&](const node_type& child) { return child.first == keyPiece; });
 
             if(branch == current_node->children.end())
             {
@@ -129,7 +168,7 @@ public:
                           _compare);
 
                 auto next_node = std::find_if(current_node->children.begin(), current_node->children.end(), 
-                                       [&](const node_type& child) { return child.key == keyPiece; });
+                                       [&](const node_type& child) { return child.first == keyPiece; });
 
                 current_node = std::addressof(*next_node);
             }
@@ -137,21 +176,18 @@ public:
                 current_node = std::addressof(*branch);
         }
 
-        // TODO: return iterator
-        if(!current_node->value.has_value())
+        bool emplaced = false;
+        if(!current_node->second.has_value())
         {
-            current_node->value.emplace(std::move(value));
+            current_node->second.emplace(std::move(value));
+            emplaced = true;
             ++_size;
-
-            if(_compare(*current_node, *_leftmost))
-                _leftmost = current_node;
 
             if(_compare(*_rightmost, *current_node))
                 _rightmost = current_node;
         }
-        else
-        {
-        }
+
+        return std::make_pair(iterator(current_node),emplaced);
     }
 
     // TODO: return iterator
@@ -163,7 +199,7 @@ public:
             key_type keyPiece = key.substr(0,i);
 
             auto branch = std::find_if(current_node->children.begin(), current_node->children.end(), 
-                                       [&](const node_type& child) { return child.key == keyPiece; });
+                                       [&](const node_type& child) { return child.first == keyPiece; });
 
             if(branch == current_node->children.end())
                 return nullptr;
@@ -182,9 +218,8 @@ private:
 
     size_t _size;    
 
-    node_type _root;
-    node_type* _leftmost;
-    node_type* _rightmost;
+    node_type  _root;
+    node_type* _rightmost; // TODO: copy ctorban a régire fog mutatni :S
 
     node_compare _compare;
 };
