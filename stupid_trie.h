@@ -95,7 +95,7 @@ protected:
 public:
     /********************************* Constructors **********************************/
     explicit stupid_trie(const _Compare& compare = _Compare{}) 
-        : _size{}, _compare{compare}
+        : _size{}, _leftmost{&_root}, _rightmost{&_root},_compare{compare}
     {}
 
     stupid_trie(const stupid_trie&) = default;
@@ -122,12 +122,16 @@ public:
 
             if(branch == current_node->children.end())
             {
-                auto& next_node = current_node->children.emplace_back(std::move(keyPiece));
-                current_node = &next_node;
+                current_node->children.emplace_back(keyPiece);
 
                 std::sort(current_node->children.begin(),
                           current_node->children.end(),
                           _compare);
+
+                auto next_node = std::find_if(current_node->children.begin(), current_node->children.end(), 
+                                       [&](const node_type& child) { return child.key == keyPiece; });
+
+                current_node = std::addressof(*next_node);
             }
             else
                 current_node = std::addressof(*branch);
@@ -138,12 +142,19 @@ public:
         {
             current_node->value.emplace(std::move(value));
             ++_size;
+
+            if(_compare(*current_node, *_leftmost))
+                _leftmost = current_node;
+
+            if(_compare(*_rightmost, *current_node))
+                _rightmost = current_node;
         }
         else
         {
         }
     }
 
+    // TODO: return iterator
     const node_type* find(const key_type& key) const
     {
         const node_type* current_node = &_root;
@@ -170,7 +181,11 @@ public:
 private:
 
     size_t _size;    
+
     node_type _root;
+    node_type* _leftmost;
+    node_type* _rightmost;
+
     node_compare _compare;
 };
 
