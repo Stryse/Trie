@@ -108,7 +108,7 @@ public:
         using value_type        = std::pair<const key_type, const std::reference_wrapper<mapped_type>>;
         
         explicit iterator(node_type* ptr) : _pointed_node(ptr) {}
-        ~iterator()               = default;
+        virtual ~iterator()       = default;
         iterator(const iterator&) = default;
         iterator(iterator&&)      = default;
 
@@ -152,7 +152,7 @@ public:
         explicit const_iterator(const node_type* ptr) : _pointed_node(ptr) {}
         const_iterator(const iterator& it)            : _pointed_node(it._pointed_node) {}
 
-        ~const_iterator()                     = default;
+        virtual ~const_iterator()             = default;
         const_iterator(const const_iterator&) = default;
         const_iterator(const_iterator&&)      = default;
 
@@ -212,15 +212,49 @@ private:
         return current_node;
     }
 
+    node_type* find_node(const key_type& key)
+    {
+        return const_cast<node_type*>(static_cast<const stupid_trie*>(this)->find_node(key));
+    }
+
+    const node_type* find_rightmost() const
+    {
+        const node_type* current_node = &_root;
+        while(!current_node->children.empty())
+            current_node = &current_node->children.back();
+
+        return current_node;
+    }
+
+    node_type* find_rightmost()
+    {
+        return const_cast<node_type*>(static_cast<const stupid_trie*>(this)->find_rightmost());
+    }
+
 public:
     /********************************* Constructors **********************************/
     explicit stupid_trie(const _Compare& compare = _Compare{}) 
         : _size{}, _rightmost{&_root}, _compare{compare}
     {}
 
-    stupid_trie(const stupid_trie&) = default;
+    stupid_trie(const stupid_trie& other)
+        : _root(other._root), _rightmost(find_rightmost()), _compare(other._compare)
+    {}
+
     stupid_trie(stupid_trie&&)      = default;
     virtual ~stupid_trie()          = default;
+
+    /****************************** Assignment operators *****************************/
+
+    stupid_trie& operator=(const stupid_trie& other)
+    {
+        this->_root      = other._root;
+        this->_rightmost = find_rightmost();
+        this->_compare   = other._compare;
+    }
+
+    stupid_trie& operator=(stupid_trie&&) = default;
+
     /*********************************************************************************/
 
     bool   empty() const noexcept { return _size == 0;  }
@@ -231,9 +265,10 @@ public:
         return (find(key) == cend()) ? 0 : 1;
     }
 
-    std::pair<iterator,bool> emplace(key_type&& key, mapped_type&& value)
+    template<typename Key, typename Value>
+    std::pair<iterator,bool> emplace(Key&& key, Value&& value)
     {
-        key_type local_key(std::move(key));
+        key_type local_key(std::forward<Key>(key));
         node_type* current_node = &_root;
 
         for(size_t i = 1; i <= local_key.size(); ++i)
@@ -263,7 +298,7 @@ public:
         bool emplaced = false;
         if(!current_node->second.has_value())
         {
-            current_node->second.emplace(std::move(value));
+            current_node->second.emplace(std::forward<Value>(value));
             emplaced = true;
             ++_size;
 
@@ -276,7 +311,7 @@ public:
 
     iterator find(const key_type& key)
     {
-        return iterator(const_cast<node_type*>(find_node(key)));
+        return iterator(find_node(key));
     }
 
     const_iterator find(const key_type& key) const
@@ -296,7 +331,7 @@ public:
 
     mapped_type& at(const key_type& key)
     {
-        node_type* target = const_cast<node_type*>(find_node(key));
+        node_type* target = find_node(key);
         
         if(target != nullptr && target->second.has_value())
             return target->second.value();
@@ -316,7 +351,7 @@ public:
 
     std::optional<mapped_type> operator[](const key_type& key)
     {
-        node_type* target = const_cast<node_type*>(find_node(key));
+        node_type* target = find_node(key);
 
         if(target == nullptr)
             return std::nullopt;
@@ -329,7 +364,7 @@ private:
     size_t _size;    
 
     node_type  _root;
-    node_type* _rightmost; // TODO: copy ctorban a régire fog mutatni :S
+    node_type* _rightmost;
 
     node_compare _compare;
 };
