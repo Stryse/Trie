@@ -6,6 +6,8 @@
 #include <optional>
 #include <vector>
 #include <algorithm>
+#include <memory>
+#include <stdexcept>
 
 template<typename _Tp, 
          typename _Compare = std::less<std::string>>
@@ -15,6 +17,10 @@ class stupid_trie
 
 protected:
     class trie_node;
+
+public:
+    class iterator;
+    class const_iterator;
 
 public:
     /********************************* Member types *********************************/
@@ -79,10 +85,10 @@ protected:
      ********************************************************/
     struct node_compare
     {
-        node_compare(const key_compare& compare)
+        explicit node_compare(const key_compare& compare)
             : compare(compare){}
 
-        bool operator()(const node_type& lhs, const node_type& rhs)
+        bool operator()(const node_type& lhs, const node_type& rhs) const
         {
             return compare(lhs.first,rhs.first);
         }
@@ -91,16 +97,17 @@ protected:
     };
 
 public:
+    /***************************************** Iterator *******************************************/
     class iterator
     {
+        friend class const_iterator;
+
     public:
         using iterator_category = std::forward_iterator_tag;
         using difference_type   = std::ptrdiff_t;
-        using value_type        = node_type;
-        using pointer           = node_type*;
-        using reference         = node_type&;
-
-        iterator(node_type* ptr) : _pointed_node(ptr) {}
+        using value_type        = std::pair<const key_type, const std::reference_wrapper<mapped_type>>;
+        
+        explicit iterator(node_type* ptr) : _pointed_node(ptr) {}
         ~iterator()               = default;
         iterator(const iterator&) = default;
         iterator(iterator&&)      = default;
@@ -108,8 +115,15 @@ public:
         iterator& operator=(const iterator&) = default;
         iterator& operator=(iterator&&)      = default;
 
-        reference operator* () const { return *_pointed_node; }
-        pointer   operator->() const { return  _pointed_node; }
+        value_type operator* () const 
+        { 
+            return value_type(_pointed_node->first, _pointed_node->second.value()); 
+        }
+
+        std::unique_ptr<value_type> operator->() const 
+        { 
+            return std::make_unique<value_type>(_pointed_node->first,_pointed_node->second.value()); 
+        }
         
         //iterator& operator++()
         //{
@@ -128,13 +142,80 @@ public:
         node_type* _pointed_node;
     };
 
+    class const_iterator
+    {
+    public:
+        using iterator_category = std::forward_iterator_tag;
+        using difference_type   = std::ptrdiff_t;
+        using value_type        = std::pair<const key_type, const std::reference_wrapper<const mapped_type>>;
+
+        explicit const_iterator(const node_type* ptr) : _pointed_node(ptr) {}
+        const_iterator(const iterator& it)            : _pointed_node(it._pointed_node) {}
+
+        ~const_iterator()                     = default;
+        const_iterator(const const_iterator&) = default;
+        const_iterator(const_iterator&&)      = default;
+
+        const_iterator& operator=(const const_iterator&) = default;
+        const_iterator& operator=(const_iterator&&)      = default;
+
+        value_type operator* () const 
+        { 
+            return value_type(_pointed_node->first, _pointed_node->second.value()); 
+        }
+
+        std::unique_ptr<value_type> operator->() const 
+        { 
+            return std::make_unique<value_type>(_pointed_node->first,_pointed_node->second.value()); 
+        }
+        
+        //iterator& operator++()
+        //{
+
+        //}
+
+        //iterator operator++(int)
+        //{
+
+        //}
+
+        friend bool operator==(const const_iterator& lhs, const const_iterator& rhs) { return lhs._pointed_node == rhs._pointed_node; }
+        friend bool operator!=(const const_iterator& lhs, const const_iterator& rhs) { return !(lhs == rhs); }
+
+    private:
+        const node_type* _pointed_node;
+    };
+
     iterator begin() const noexcept { return iterator(&_root);  }
     iterator end()   const noexcept { return iterator(nullptr); }
+
+    const_iterator cbegin() const noexcept { return const_iterator(&_root);  }
+    const_iterator cend()   const noexcept { return const_iterator(nullptr); }
+
+private:
+
+    const node_type* find_node(const key_type& key) const
+    {
+        const node_type* current_node = &_root;
+        for(size_t i = 1; i <= key.size(); ++i)
+        {
+            key_type keyPiece = key.substr(0,i);
+
+            auto branch = std::find_if(current_node->children.begin(), current_node->children.end(), 
+                                       [&](const node_type& child) { return child.first == keyPiece; });
+
+            if(branch == current_node->children.end())
+                return nullptr;
+            else
+                current_node = std::addressof(*branch);
+        }
+        return current_node;
+    }
 
 public:
     /********************************* Constructors **********************************/
     explicit stupid_trie(const _Compare& compare = _Compare{}) 
-        : _size{}, _rightmost{&_root},_compare{compare}
+        : _size{}, _rightmost{&_root}, _compare{compare}
     {}
 
     stupid_trie(const stupid_trie&) = default;
@@ -145,8 +226,11 @@ public:
     bool   empty() const noexcept { return _size == 0;  }
     size_t size()  const noexcept { return _size;       } 
 
+    size_t count(const key_type& key) const
+    {
+        return (find(key) == cend()) ? 0 : 1;
+    }
 
-    // TODO: return iterator
     std::pair<iterator,bool> emplace(key_type&& key, mapped_type&& value)
     {
         key_type local_key(std::move(key));
@@ -190,28 +274,54 @@ public:
         return std::make_pair(iterator(current_node),emplaced);
     }
 
-    // TODO: return iterator
-    const node_type* find(const key_type& key) const
+    iterator find(const key_type& key)
     {
-        const node_type* current_node = &_root;
-        for(size_t i = 1; i <= key.size(); ++i)
-        {
-            key_type keyPiece = key.substr(0,i);
-
-            auto branch = std::find_if(current_node->children.begin(), current_node->children.end(), 
-                                       [&](const node_type& child) { return child.first == keyPiece; });
-
-            if(branch == current_node->children.end())
-                return nullptr;
-            else
-                current_node = std::addressof(*branch);
-        }
-        return current_node;
+        return iterator(const_cast<node_type*>(find_node(key)));
     }
 
-    size_t count(const key_type& key) const
+    const_iterator find(const key_type& key) const
     {
-        return (find(key) == nullptr) ? 0 : 1;
+        return const_iterator(find_node(key));
+    }
+
+    const mapped_type& at(const key_type& key) const
+    {
+        const node_type* target = find_node(key);
+        
+        if(target != nullptr && target->second.has_value())
+            return target->second.value();
+        else
+            throw std::out_of_range("stupid_trie::at() was invoked with key that is not stored.");
+    }
+
+    mapped_type& at(const key_type& key)
+    {
+        node_type* target = const_cast<node_type*>(find_node(key));
+        
+        if(target != nullptr && target->second.has_value())
+            return target->second.value();
+        else
+            throw std::out_of_range("stupid_trie::at() was invoked with key that is not stored.");
+    }
+
+    const std::optional<mapped_type> operator[](const key_type& key) const
+    {
+        const node_type* target = find_node(key);
+
+        if(target == nullptr)
+            return std::nullopt;
+        else
+            return target->second;
+    }
+
+    std::optional<mapped_type> operator[](const key_type& key)
+    {
+        node_type* target = const_cast<node_type*>(find_node(key));
+
+        if(target == nullptr)
+            return std::nullopt;
+        else
+            return target->second;
     }
 
 private:
