@@ -84,7 +84,7 @@ protected:
                 child.parent = this;
         }
 
-        trie_node(trie_node&& other)
+        trie_node(trie_node&& other) noexcept
             : first(std::move(other.first)), compare(std::move(other.compare)),
               second(std::move(other.second)), parent(std::move(other.parent)), 
               children(std::move(other.children))
@@ -110,7 +110,7 @@ protected:
             return *this;
         }
 
-        trie_node& operator=(trie_node&& other)
+        trie_node& operator=(trie_node&& other) noexcept
         {
             this->first    = std::move(other.first);
             this->compare  = std::move(other.compare);
@@ -210,11 +210,11 @@ public:
         
         explicit iterator(node_type* ptr) :  _pointed_node(ptr) {}
         iterator(const iterator&)            = default;
-        iterator(iterator&&)                 = default;
+        iterator(iterator&&) noexcept        = default;
         virtual ~iterator()                  = default;
 
-        iterator& operator=(const iterator&) = default;
-        iterator& operator=(iterator&&)      = default;
+        iterator& operator=(const iterator&)     = default;
+        iterator& operator=(iterator&&) noexcept = default;
 
         value_type operator* () const 
         { 
@@ -261,10 +261,10 @@ public:
 
         virtual ~const_iterator()                        = default;
         const_iterator(const const_iterator&)            = default;
-        const_iterator(const_iterator&&)                 = default;
+        const_iterator(const_iterator&&) noexcept        = default;
 
-        const_iterator& operator=(const const_iterator&) = default;
-        const_iterator& operator=(const_iterator&&)      = default;
+        const_iterator& operator=(const const_iterator&)     = default;
+        const_iterator& operator=(const_iterator&&) noexcept = default;
 
         value_type operator* () const 
         { 
@@ -306,7 +306,10 @@ public:
         return (current_node->second.has_value()) ? iterator(current_node) : end();
     }
 
-    iterator end() noexcept { return iterator(nullptr);   }
+    const_iterator begin()  const noexcept { return cbegin(); }
+
+    iterator       end()          noexcept { return iterator(nullptr); }
+    const_iterator end()    const noexcept { return cend();            }
 
     const_iterator cbegin() const noexcept { return const_iterator(begin());   }
     const_iterator cend()   const noexcept { return const_iterator(nullptr);   }
@@ -342,14 +345,14 @@ public:
         : _size{0}, _key_compare{compare}, _node_compare{compare}, _root{_key_compare}
     {}
 
-    stupid_trie(const stupid_trie&) = default;
-    stupid_trie(stupid_trie&&)      = default;
-    virtual ~stupid_trie()          = default;
+    stupid_trie(const stupid_trie&)     = default;
+    stupid_trie(stupid_trie&&) noexcept = default;
+    virtual ~stupid_trie()              = default;
 
     /****************************** Assignment operators *****************************/
 
     stupid_trie& operator=(const stupid_trie& other) = default;
-    stupid_trie& operator=(stupid_trie&&)            = default;
+    stupid_trie& operator=(stupid_trie&&) noexcept   = default;
 
     /*********************************************************************************/
 
