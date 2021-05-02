@@ -42,35 +42,42 @@ protected:
     struct trie_node
     {
         key_type first;
+        std::reference_wrapper<const key_compare> compare;
         std::optional<mapped_type> second;
 
         trie_node* parent;
         std::vector<trie_node> children;
 
-        explicit trie_node(node_type* parent = nullptr) 
-            : first{}, parent(parent)
+        /*********************************** Constructors ****************************************************/
+        explicit trie_node(const key_compare& key_compare, node_type* parent = nullptr) 
+            : first{}, compare(key_compare), parent(parent)
         {}
 
-        explicit trie_node(const key_type& key, node_type* parent = nullptr)
-            : first(key), parent(parent)
+        explicit trie_node(const key_type& key, const key_compare& key_compare, node_type* parent = nullptr)
+            : first(key), compare(key_compare), parent(parent)
         {}
 
-        explicit trie_node(key_type&& key, node_type* parent = nullptr)
-            : first(std::move(key)), parent(parent)
+        explicit trie_node(key_type&& key, const key_compare& key_compare, node_type* parent = nullptr)
+            : first(std::move(key)), compare(key_compare), parent(parent)
         {}
 
-        explicit trie_node(const key_type& key, const mapped_type& value, node_type* parent = nullptr)
-            : first(key), second(value), parent(parent)
+        explicit trie_node(const key_type& key, const key_compare& key_compare, 
+                           const mapped_type& value, node_type* parent = nullptr)
+
+            : first(key), compare(key_compare), second(value), parent(parent)
         {}
 
-        explicit trie_node(key_type&& key, mapped_type&& value, node_type* parent = nullptr)
-            : first(std::move(key)), second(std::move(value)), parent(parent)
+        explicit trie_node(key_type&& key, const key_compare& key_compare,
+                           mapped_type&& value, node_type* parent = nullptr)
+
+            : first(std::move(key)), compare(key_compare), second(std::move(value)), parent(parent)
         {}
 
         virtual ~trie_node() = default;
 
         trie_node(const trie_node& other)
-            : first(other.first), second(other.second), parent(other.parent) ,children(other.children)
+            : first(other.first), compare(other.compare),
+              second(other.second), parent(other.parent) ,children(other.children)
         {
             // Revalidate parent pointers since copy invalidated it
             for(auto& child : children)
@@ -78,7 +85,8 @@ protected:
         }
 
         trie_node(trie_node&& other)
-            : first(std::move(other.first)), second(std::move(other.second)), parent(std::move(other.parent)), 
+            : first(std::move(other.first)), compare(std::move(other.compare)),
+              second(std::move(other.second)), parent(std::move(other.parent)), 
               children(std::move(other.children))
         {
             // Revalidate parent pointers since move invalidated it
@@ -86,9 +94,11 @@ protected:
                 child.parent = this;
         }
 
+        /************************************ Assignment ****************************************/
         trie_node& operator=(const trie_node& other)
         {
             this->first    = other.first;
+            this->compare  = other.compare;
             this->second   = other.second;
             this->children = other.children;
             this->parent   = other.parent;
@@ -103,6 +113,7 @@ protected:
         trie_node& operator=(trie_node&& other)
         {
             this->first    = std::move(other.first);
+            this->compare  = std::move(other.compare);
             this->second   = std::move(other.second);
             this->children = std::move(other.children);
             this->parent   = std::move(other.parent);
@@ -114,9 +125,10 @@ protected:
             return *this;
         }
 
+        /****************************************** Functionality *********************************/
         bool operator==(const node_type& other) const
         {
-            return first == other.first;
+            return !compare(first,other.first) && !compare(other.first,first);
         }
 
         const node_type* next_node() const
@@ -181,7 +193,7 @@ protected:
             return compare(lhs.first,rhs.first);
         }
 
-        key_compare compare;
+        const key_compare& compare;
     };
 
 public:
@@ -326,8 +338,8 @@ private:
 
 public:
     /********************************* Constructors **********************************/
-    explicit stupid_trie(const _Compare& compare = _Compare{}) 
-        : _size{0}, _compare{compare}
+    explicit stupid_trie(const key_compare& compare = key_compare{}) 
+        : _size{0}, _key_compare{compare}, _node_compare{compare}, _root{_key_compare}
     {}
 
     stupid_trie(const stupid_trie&) = default;
@@ -349,6 +361,9 @@ public:
         return (find(key) == cend()) ? 0 : 1;
     }
 
+    /***************************************
+     * Invalidates all previous iterators !!
+    ****************************************/
     template<typename Key, typename Value>
     std::pair<iterator,bool> emplace(Key&& key, Value&& value)
     {
@@ -361,21 +376,23 @@ public:
 
             // Lookup branch
             auto branch = std::find_if(current_node->children.begin(), current_node->children.end(), 
-                                       [&](const node_type& child) { return child.first == keyPiece; });
+                                       [&](const node_type& child) { return !_key_compare(child.first,keyPiece) &&
+                                                                            !_key_compare(keyPiece,child.first); });
 
             // We need new branch if it doesn't exist
             if(branch == current_node->children.end())
             {
-                current_node->children.emplace_back(keyPiece, current_node);
+                current_node->children.emplace_back(keyPiece, _key_compare ,current_node);
 
                 // Sort children to regain search tree invariant
                 std::sort(current_node->children.begin(),
                           current_node->children.end(),
-                          _compare);
+                          _node_compare);
 
                 // Locate next node since sorting might moved it
                 auto next_node = std::find_if(current_node->children.begin(), current_node->children.end(), 
-                                       [&](const node_type& child) { return child.first == keyPiece; });
+                                       [&](const node_type& child) { return !_key_compare(child.first,keyPiece) &&
+                                                                            !_key_compare(keyPiece,child.first); });
 
                 current_node = std::addressof(*next_node);
             }
@@ -426,14 +443,6 @@ public:
             throw std::out_of_range("stupid_trie::at() was invoked with key that is not stored.");
     }
 
-    const std::optional<std::reference_wrapper<const mapped_type>> operator[](const key_type& key) const
-    {
-        const node_type* target = find_node(key);
-
-        return (target != nullptr && target->second.has_value())
-                    ? std::optional(std::cref(target->second.value())) : std::nullopt;
-    }
-
     std::optional<std::reference_wrapper<mapped_type>> operator[](const key_type& key)
     {
         node_type* target = find_node(key);
@@ -442,12 +451,20 @@ public:
                     ? std::optional(std::ref(target->second.value())) : std::nullopt;
     }
 
+    const std::optional<std::reference_wrapper<const mapped_type>> operator[](const key_type& key) const
+    {
+        const node_type* target = find_node(key);
+
+        return (target != nullptr && target->second.has_value())
+                    ? std::optional(std::cref(target->second.value())) : std::nullopt;
+    }
+
 private:
 
     size_t _size;    
-
+    key_compare  _key_compare;
+    node_compare _node_compare;
     node_type  _root;
-    node_compare _compare;
 };
 
 #endif /* STUPID_TRIE__H */
