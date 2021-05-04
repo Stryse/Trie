@@ -27,11 +27,7 @@ public:
     /********************************* Member types *********************************/
     using key_type        = std::string;
     using mapped_type     = _Tp;
-    using value_type      = std::pair<const std::string, std::reference_wrapper<_Tp>>;
-                            // reference wrapper is used for mapped_type so we are able
-                            // to reassign mapped values through iterators
-
-    using cvalue_type     = std::pair<const std::string, std::reference_wrapper<const _Tp>>;
+    using value_type      = std::pair<const std::string, mapped_type&>;
     using size_type       = size_t;
     using key_compare     = _Compare;
     using node_type       = trie_node;
@@ -251,8 +247,8 @@ public:
     public:
         using iterator_category = std::forward_iterator_tag;
         using difference_type   = std::ptrdiff_t;
-        using value_type        = stupid_trie::cvalue_type;
-        using pointer           = std::unique_ptr<cvalue_type>;
+        using value_type        = stupid_trie::value_type;
+        using pointer           = std::unique_ptr<value_type>;
 
         explicit const_iterator(const node_type* ptr) : _pointed_node(ptr) {}
 
@@ -266,12 +262,12 @@ public:
         const_iterator& operator=(const const_iterator&)     = default;
         const_iterator& operator=(const_iterator&&) noexcept = default;
 
-        value_type operator* () const 
+        const value_type operator* () const 
         { 
             return value_type(_pointed_node->first, _pointed_node->second.value()); 
         }
 
-        pointer operator->() const 
+        const pointer operator->() const 
         { 
             return std::make_unique<value_type>(_pointed_node->first,_pointed_node->second.value()); 
         }
