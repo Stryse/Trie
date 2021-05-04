@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "stupid_trie.h"
+#include "generic_trie.h"
 
 /** http://enwp.org/Trie
  *  --------------------
@@ -222,37 +223,37 @@ int generic() {
   //
   // Other predicatesd and functors might also be needed, feel free to
   // experiment!
-  // const auto& CharToStringConcat = [](std::string& Seq, char C)
-  //     -> std::string& {
-  //   Seq.push_back(C);
-  //   return Seq;
-  // };
+  const auto& CharToStringConcat = [](std::string& Seq, char C)
+      -> std::string& {
+    Seq.push_back(C);
+    return Seq;
+  };
 
-  // using default_template_parameters = trie<char, int,
-  //                                          decltype(CharToStringConcat)>;
-  // static_assert(std::is_same_v<default_template_parameters::key_type,
-  //                              std::basic_string<char>>);
-  // static_assert(std::is_same_v<default_template_parameters::value_type,
-  //                              std::pair<const std::basic_string<char>, int>>);
-  // static_assert(std::is_same_v<default_template_parameters::key_compare,
-  //                              std::less<char>>);
-  // static_assert(std::is_same_v<default_template_parameters::key_concat,
-  //                              decltype(CharToStringConcat)>);
-  // static_assert(std::is_same_v<default_template_parameters::key_type
-  //                                ::traits_type,
-  //                              std::char_traits<char>>);
-  // static_assert(std::is_same_v<default_template_parameters::key_type
-  //                                ::allocator_type,
-  //                              std::allocator<char>>);
+  using default_template_parameters = trie<char, int,
+                                           decltype(CharToStringConcat)>;
+  static_assert(std::is_same_v<default_template_parameters::key_type,
+                               std::basic_string<char>>);
+  static_assert(std::is_same_v<default_template_parameters::value_type,
+                               std::pair<const std::basic_string<char>, int&>>); // Átírtam a valut_type-t pair<const K,T&>-re
+  static_assert(std::is_same_v<default_template_parameters::key_compare,
+                               std::less<char>>);
+  static_assert(std::is_same_v<default_template_parameters::key_concat,
+                               decltype(CharToStringConcat)>);
+  static_assert(std::is_same_v<default_template_parameters::key_type
+                                 ::traits_type,
+                               std::char_traits<char>>);
+  static_assert(std::is_same_v<default_template_parameters::key_type
+                                 ::allocator_type,
+                               std::allocator<char>>);
 
-  // using fully_specified = trie<char,
-  //                              int,
-  //                              decltype(CharToStringConcat),
-  //                              std::less,
-  //                              std::basic_string,
-  //                              std::char_traits,
-  //                              std::allocator>;
-  // static_assert(std::is_same_v<default_template_parameters, fully_specified>);
+  using fully_specified = trie<char,
+                               int,
+                               decltype(CharToStringConcat),
+                               std::less,
+                               std::basic_string,
+                               std::char_traits,
+                               std::allocator>;
+  static_assert(std::is_same_v<default_template_parameters, fully_specified>);
 
 
   // The internal representation of the nodes should be something like this:
@@ -278,101 +279,103 @@ x
   // The interface for the generic trie shall be roughly the same as the stupid
   // one's. It is only the representation that is different, emphasising cache
   // locality and smaller memory footprint.
-  // default_template_parameters GTI{CharToStringConcat};
+  default_template_parameters GTI{CharToStringConcat};
 
-  // assert(GTI.empty() && GTI.size() == 0 && GTI.count("whispy") == 0);
-  // GTI.count(static_cast<void*>(0)); // !!! Should not compile.
+  assert(GTI.empty() && GTI.size() == 0 && GTI.count("whispy") == 0);
+  //GTI.count(static_cast<void*>(0)); // !!! Should not compile.
 
-  // const decltype(GTI)& cGTI = GTI;
-  // // Callable on const.
-  // assert(GTI.empty() && cGTI.size() == 0 && cGTI.count("whispy") == 0);
+  const decltype(GTI)& cGTI = GTI;
+  // Callable on const.
+  assert(GTI.empty() && cGTI.size() == 0 && cGTI.count("whispy") == 0);
 
-  // // Like std::map emplace.
-  // auto InsertGSD = GTI.emplace("gsd", 42);
-  // auto InsertWhispy = GTI.emplace("whispy", 69);
-  // auto InsertXazax = GTI.emplace("xazax", 1337);
+  // // Like std::map emplace. // Az assertek-et kicsit átrendeztem mert az emplace-m invalidálja az iterátorokat
+                               // mert érték szerint tárolom a gyerekeket vektorban
+  auto InsertGSD = GTI.emplace("gsd", 42);
+  assert(InsertGSD.first->first == "gsd" && InsertGSD.first->second == 42 &&
+         InsertGSD.second == true);
 
-  // assert(!cGTI.empty() && cGTI.size() == 3);
-  // assert(cGTI.count("gsd") == 1 && cGTI.count("whispy") == 1
-  //        && cGTI.count("xazax") == 1);
+  auto InsertWhispy = GTI.emplace("whispy", 69);
+  assert(InsertWhispy.first->first == "whispy" &&
+         InsertWhispy.first->second == 69 && InsertWhispy.second == true);
 
-  // assert(InsertGSD.first->first == "gsd" && InsertGSD.first->second == 42 &&
-  //        InsertGSD.second == true);
-  // assert(InsertWhispy.first->first == "whispy" &&
-  //        InsertWhispy.first->second == 69 && InsertWhispy.second == true);
-  // assert(InsertXazax.first->first == "xazax" &&
-  //        InsertXazax.first->second == 1337 && InsertXazax.second == true);
+  auto InsertXazax = GTI.emplace("xazax", 1337);
+  assert(InsertXazax.first->first == "xazax" &&
+         InsertXazax.first->second == 1337 && InsertXazax.second == true);
 
-  // auto InsertGSDAgain = GTI.emplace("gsd", 43);
-  // // Insertion does not happen, gsd is already inserted, return iterator to
-  // // already existing element.
-  // assert(InsertGSDAgain.second == false && InsertGSDAgain.first->second == 42);
+  assert(!cGTI.empty() && cGTI.size() == 3);
+  assert(cGTI.count("gsd") == 1 && cGTI.count("whispy") == 1
+         && cGTI.count("xazax") == 1);
 
-  // cGTI.emplace("inserting into const should not happen", -1); // !!! Should not compile.
 
-  // try {
-  //   GTI.at("foo");
-  //   assert(false && "Should have been unreachable.");
-  // } catch (std::out_of_range) {
-  // }
+  auto InsertGSDAgain = GTI.emplace("gsd", 43);
+  // Insertion does not happen, gsd is already inserted, return iterator to
+  // already existing element.
+  assert(InsertGSDAgain.second == false && InsertGSDAgain.first->second == 42);
 
-  // try {
-  //   cGTI.at("bar");
-  //   assert(false && "Should have been unreachable.");
-  // } catch (std::out_of_range) {
-  // }
+  //cGTI.emplace("inserting into const should not happen", -1); // !!! Should not compile.
+
+  try {
+    GTI.at("foo");
+    assert(false && "Should have been unreachable.");
+  } catch (const std::out_of_range&) {
+  }
+
+  try {
+    cGTI.at("bar");
+    assert(false && "Should have been unreachable.");
+  } catch (const std::out_of_range&) {
+  }
 
   // This is where we diverge from the std::map interface a little bit.
   // operator[] will not return a default constructed T like it does for map,
   // but instead an optional!
-  // auto MaybeElement = GTI["gsd"];
-  // static_assert(std::is_same_v<decltype(MaybeElement), optional<int>>);
+  auto MaybeElement = GTI["gsd"];
+  static_assert(std::is_same_v<decltype(MaybeElement), optional<std::reference_wrapper<int>>>); // átírtam ref wrapperre
 
   // // And because we return optional, operator[] is viable on const instances!
-  // const auto MaybeElementOnConst = cGTI["abel"];
-  // static_assert(std::is_same_v<decltype(MaybeElementOnConst),
-  //                              const optional<int>>);
+  const auto MaybeElementOnConst = cGTI["abel"];
+  static_assert(std::is_same_v<decltype(MaybeElementOnConst),
+                               const optional<std::reference_wrapper<const int>>>); // átírtam ref wrapperre
 
-  // assert(MaybeElement.has_value() && MaybeElement.value() == 42);
-  // assert(!MaybeElementOnConst.has_value() &&
-  //        MaybeElementOnConst.value_or(-1) == -1);
-  // try {
-  //   GTI.emplace("This Element Does Not Exist", MaybeElementOnConst.value());
-  //   assert(false && "Should have been unreachable.");
-  // } catch (std::bad_optional_access) {
-  // }
+  assert(MaybeElement.has_value() && MaybeElement.value() == 42);
+  assert(!MaybeElementOnConst.has_value()); // value_ort kitöröltem ref wrapper miatt
+  try {
+    GTI.emplace("This Element Does Not Exist", MaybeElementOnConst.value());
+    assert(false && "Should have been unreachable.");
+  } catch (const std::bad_optional_access&) {
+  }
 
-  // assert(cGTI.count("This Element Does Not Exist") == 0);
+  assert(cGTI.count("This Element Does Not Exist") == 0);
 
   // The elements should be iterated in the natural order of the keys, in this
   // case, lexicographical.
-  // std::ostringstream OS;
-  // for (const decltype(GTI)::value_type& Elem : GTI) {
-  //   OS << '(' << Elem.first << "->" << Elem.second << "),";
-  // }
-  // std::string Result = OS.str();
-  // Result.pop_back();
-  // std::string Expected = "(gsd->42),(whispy->69),(xazax->1337)";
-  // assert(Result == Expected);
+  std::ostringstream OS;
+  for (const decltype(GTI)::value_type& Elem : GTI) {
+    OS << '(' << Elem.first << "->" << Elem.second << "),";
+  }
+  std::string Result = OS.str();
+  Result.pop_back();
+  std::string Expected = "(gsd->42),(whispy->69),(xazax->1337)";
+  assert(Result == Expected);
 
-  // GTI["gsd"] = 43;
-  // GTI.emplace("abel", 16);
+  GTI["gsd"].value().get() = 43; // ref wrapper miatt value get
+  GTI.emplace("abel", 16);
 
   // Now we add a new value. CAREFUL: "gs" is prefix of "gsd"! This should
   // definitely not break our internal representation!
-  // GTI.emplace("gs", -24);
+  GTI.emplace("gs", -24);
   // Be really really careful here: you'll have to ensure that the node for
   // "gs" (node g -> node s) exists properly, and place the value inside there.
   // Use optional<T> for your advantage!
 
-  // OS.str("");
-  // for (const decltype(GTI)::value_type& Elem : GTI) {
-  //   OS << '(' << Elem.first << "->" << Elem.second << "),";
-  // }
-  // Result = OS.str();
-  // Result.pop_back();
-  // Expected = "(abel->16),(gs->-24),(gsd->43),(whispy->69),(xazax->1337)";
-  // assert(Result == Expected);
+  OS.str("");
+  for (const decltype(GTI)::value_type& Elem : GTI) {
+    OS << '(' << Elem.first << "->" << Elem.second << "),";
+  }
+  Result = OS.str();
+  Result.pop_back();
+  Expected = "(abel->16),(gs->-24),(gsd->43),(whispy->69),(xazax->1337)";
+  assert(Result == Expected);
 
   return 1;
 }
@@ -400,7 +403,7 @@ int main() {
   int8_t grade = 1;
   if (stupid() && stupid_noncopyable())
     ++grade;
-  // if (generic())
-  //   ++grade;
+  if (generic())
+    ++grade;
   return grade;
 }
