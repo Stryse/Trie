@@ -239,6 +239,7 @@ public:
     class iterator
     {
         friend class const_iterator;
+        friend class trie;
 
     public:
         using iterator_category = std::forward_iterator_tag;
@@ -290,11 +291,13 @@ public:
 
     class const_iterator
     {
+        friend class trie;
+
     public:
         using iterator_category = std::forward_iterator_tag;
         using difference_type   = std::ptrdiff_t;
-        using value_type        = trie::value_type;
-        using pointer           = std::unique_ptr<value_type>;
+        using const_value_type  = std::pair<const trie::key_type, const mapped_type&>;
+        using pointer           = std::unique_ptr<const_value_type>;
 
         explicit const_iterator(const node_type* ptr, const key_concat& concat) 
             : _pointed_node(ptr), _concat(concat) {}
@@ -312,14 +315,14 @@ public:
         const_iterator& operator=(const const_iterator&)     = default;
         const_iterator& operator=(const_iterator&&) noexcept = default;
 
-        const value_type operator* () const 
+        const_value_type operator* () const 
         { 
-            return value_type(_pointed_node->trace_key(_concat), _pointed_node->value.value()); 
+            return const_value_type(_pointed_node->trace_key(_concat), _pointed_node->value.value()); 
         }
 
         const pointer operator->() const 
         { 
-            return std::make_unique<value_type>(_pointed_node->trace_key(_concat),_pointed_node->value.value()); 
+            return std::make_unique<const_value_type>(_pointed_node->trace_key(_concat),_pointed_node->value.value()); 
         }
         
         iterator& operator++()
@@ -362,6 +365,7 @@ public:
     const_iterator cend()   const noexcept { return const_iterator(nullptr, _key_concat);   }
 
 private:
+    /*************************************** Private Functionality ******************************************/
 
     const node_type* find_node(const key_type& key) const
     {
@@ -384,6 +388,27 @@ private:
         return const_cast<node_type*>(static_cast<const trie*>(this)->find_node(key));
     }
 
+    bool erase_node(node_type* node)
+    {
+        if(node == nullptr || !node->value.has_value())
+            return false;
+
+        node->value.reset();
+        --_size;
+        
+        node_type* current_node = node;
+        node_type* parent = node->parent;
+        
+        while(current_node->children.empty() && !current_node->value.has_value() && current_node->parent != nullptr)
+        {
+            parent->children.erase(std::find(parent->children.begin(),parent->children.end(),*current_node));
+            current_node = parent;
+            parent = current_node->parent;
+        }
+
+        return true;
+    }
+
 public:
     /********************************* Constructors **********************************/
     explicit trie(const key_concat&  concat,
@@ -404,6 +429,7 @@ public:
 
     /*********************************************************************************/
 
+    /****************************** Public Functionality *****************************/
     bool   empty() const noexcept { return _size == 0;  }
     size_t size()  const noexcept { return _size;       } 
 
@@ -457,6 +483,22 @@ public:
         }
 
         return std::make_pair(iterator(current_node, _key_concat),emplaced);
+    }
+
+    /***************************************
+     * Invalidates all iterators !!
+    ****************************************/
+    size_t erase(const key_type& key)
+    {
+        return (erase_node(find_node(key))) ? 1 : 0;
+    }
+
+    /***************************************
+     * Invalidates all iterators !!
+    ****************************************/
+    void erase(iterator pos)
+    {
+        erase_node(pos._pointed_node);
     }
 
     iterator find(const key_type& key)

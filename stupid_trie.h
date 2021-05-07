@@ -45,6 +45,7 @@ protected:
         std::vector<trie_node> children;
 
         /*********************************** Constructors ****************************************************/
+        
         explicit trie_node(const key_compare& key_compare, node_type* parent = nullptr) 
             : first{}, compare(key_compare), parent(parent)
         {}
@@ -247,8 +248,8 @@ public:
     public:
         using iterator_category = std::forward_iterator_tag;
         using difference_type   = std::ptrdiff_t;
-        using value_type        = stupid_trie::value_type;
-        using pointer           = std::unique_ptr<value_type>;
+        using const_value_type  = std::pair<const key_type, const mapped_type&>;
+        using pointer           = std::unique_ptr<const_value_type>;
 
         explicit const_iterator(const node_type* ptr) : _pointed_node(ptr) {}
 
@@ -262,14 +263,14 @@ public:
         const_iterator& operator=(const const_iterator&)     = default;
         const_iterator& operator=(const_iterator&&) noexcept = default;
 
-        const value_type operator* () const 
+        const_value_type operator* () const 
         { 
             return value_type(_pointed_node->first, _pointed_node->second.value()); 
         }
 
         const pointer operator->() const 
         { 
-            return std::make_unique<value_type>(_pointed_node->first,_pointed_node->second.value()); 
+            return std::make_unique<const_value_type>(_pointed_node->first,_pointed_node->second.value()); 
         }
         
         iterator& operator++()
