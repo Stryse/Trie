@@ -48,8 +48,8 @@ protected:
         using key_piece_t  = _Key_Piece;
 
         key_piece_t key_piece;
-        std::reference_wrapper<const key_compare> compare; // Needed for defining operator ==
-                                                           // because we use std::find for trie_node-s
+        std::reference_wrapper<const key_compare> compare;  // Needed for defining operator ==
+                                                            // because we use std::find for trie_node-s
 
         std::optional<mapped_type> value;
         
@@ -651,7 +651,7 @@ public:
 
 private:
 
-    size_t _size;    
+    size_t _size;
     key_concat   _key_concat;
     key_compare  _key_compare;
     node_compare _node_compare;

@@ -377,6 +377,34 @@ x
   Expected = "(abel->16),(gs->-24),(gsd->43),(whispy->69),(xazax->1337)";
   assert(Result == Expected);
 
+  // Reverse iterator test
+  OS.str("");
+  for (auto it = GTI.rbegin(); it != GTI.rend(); ++it)
+  {
+    OS << '(' << it.base()->first << "->" << it.base()->second << "),";
+  }
+  Result = OS.str();
+  Result.pop_back();
+  Expected = "(xazax->1337),(whispy->69),(gsd->43),(gs->-24),(abel->16)";
+  assert(Result == Expected);
+
+  // Find test
+  auto findWhispy = GTI.find("whispy");
+  assert(findWhispy != GTI.end() && findWhispy->first == "whispy" && findWhispy->second == 69);
+
+  auto findGregorics = GTI.find("Gregorics");
+  assert(findGregorics == GTI.end() && "No Grego Gang");
+
+  // Erase test
+  GTI.erase("gs");
+  assert(GTI.count("gs") == 0 && GTI.count("gsd") == 1);
+
+  auto GT = GTI.emplace("Gregorics", 420).first;
+  assert(GTI.count("Gregorics") == 1);
+
+  GTI.erase(GT);
+  assert(GTI.count("Gregorics") == 0);
+
   return 1;
 }
 
