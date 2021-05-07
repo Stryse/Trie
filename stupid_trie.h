@@ -135,23 +135,19 @@ protected:
             // True -> We can't go deeper the tree
             if(current_node->children.empty() && current_node->parent != nullptr)
             {
-                auto next_sibling = ++std::find(current_node->parent->children.begin(), 
-                                                current_node->parent->children.end(), 
-                                                *current_node);
-
                 // Going up while we are the last child
-                while(next_sibling == current_node->parent->children.end())
+                while(current_node == &current_node->parent->children.back())
                 {
                     current_node = current_node->parent;
 
                     // There's nowhere to move if node has no parent nor sibling
                     if(current_node->parent == nullptr)
                         return nullptr;
-
-                    next_sibling = ++std::find(current_node->parent->children.begin(), 
-                                               current_node->parent->children.end(), 
-                                               *current_node);
                 }
+
+                auto next_sibling = ++std::find(current_node->parent->children.begin(), 
+                                                current_node->parent->children.end(), 
+                                                *current_node);
 
                 current_node = std::addressof(*next_sibling);
             }
@@ -273,15 +269,15 @@ public:
             return std::make_unique<const_value_type>(_pointed_node->first,_pointed_node->second.value()); 
         }
         
-        iterator& operator++()
+        const_iterator& operator++()
         {
             _pointed_node = _pointed_node->next_node();
             return *this;
         }
 
-        iterator operator++(int)
+        const_iterator operator++(int)
         {
-            iterator no_op = *this;
+            const_iterator no_op = *this;
             ++(*this);
             return no_op;
         }
@@ -297,19 +293,27 @@ public:
     {
         node_type* current_node = &_root;
 
-        while(!current_node->children.empty())
+        while(!current_node->second.has_value())
             current_node = &current_node->children.front();
 
         return (current_node->second.has_value()) ? iterator(current_node) : end();
     }
 
-    const_iterator begin()  const noexcept { return cbegin(); }
+    const_iterator begin()  const noexcept 
+    { 
+        const node_type* current_node = &_root;
 
-    iterator       end()          noexcept { return iterator(nullptr); }
-    const_iterator end()    const noexcept { return cend();            }
+        while(!current_node->second.has_value())
+            current_node = &current_node->children.front();
 
-    const_iterator cbegin() const noexcept { return const_iterator(begin());   }
-    const_iterator cend()   const noexcept { return const_iterator(nullptr);   }
+        return (current_node->second.has_value()) ? iterator(current_node) : end();
+    }
+
+    iterator       end()          noexcept { return iterator(nullptr);         }
+    const_iterator end()    const noexcept { return const_iterator(nullptr);   }
+
+    const_iterator cbegin() const noexcept { return begin();   }
+    const_iterator cend()   const noexcept { return end();     }
 
 private:
 

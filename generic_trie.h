@@ -8,6 +8,7 @@
 #include <memory>
 #include <stdexcept>
 #include <stack>
+#include <iterator>
 
 template<typename _Key_Piece,
          typename _Tp,
@@ -156,23 +157,19 @@ protected:
             // True -> We can't go deeper the tree
             if(current_node->children.empty() && current_node->parent != nullptr)
             {
-                auto next_sibling = ++std::find(current_node->parent->children.begin(), 
-                                                current_node->parent->children.end(), 
-                                                *current_node);
-
                 // Going up while we are the last child
-                while(next_sibling == current_node->parent->children.end())
+                while(current_node == &current_node->parent->children.back())
                 {
                     current_node = current_node->parent;
 
                     // There's nowhere to move if node has no parent nor sibling
                     if(current_node->parent == nullptr)
                         return nullptr;
-
-                    next_sibling = ++std::find(current_node->parent->children.begin(), 
-                                               current_node->parent->children.end(), 
-                                               *current_node);
                 }
+
+                auto next_sibling = ++std::find(current_node->parent->children.begin(), 
+                                                current_node->parent->children.end(), 
+                                                *current_node);
 
                 current_node = std::addressof(*next_sibling);
             }
@@ -193,6 +190,45 @@ protected:
         node_type* next_node()
         {
             return const_cast<node_type*>(static_cast<const trie_node*>(this)->next_node());
+        }
+
+        const node_type* previous_node() const
+        {
+            const node_type* current_node = this;
+
+            // If we cannot go up we are first
+            if(current_node->parent == nullptr)
+                return nullptr;
+
+            // Moving up while we are only child, not first, and we have no value
+            while(current_node == &current_node->parent->children.front())
+            {
+                current_node = current_node->parent;
+
+                if(current_node->value.has_value())
+                    return current_node;
+
+                if(current_node->parent == nullptr)
+                    return nullptr;
+            }
+
+            // Find left sibling
+            auto prev_sibling = --std::find(current_node->parent->children.begin(),
+                                            current_node->parent->children.end(),
+                                           *current_node);
+
+
+            // Find rightmost node of left sibling
+            current_node = std::addressof(*prev_sibling);
+            while(!current_node->children.empty())
+                current_node = &current_node->children.back();
+
+            return current_node;
+        }
+
+        node_type* previous_node()
+        {
+            return const_cast<node_type*>(static_cast<const trie_node*>(this)->previous_node());
         }
 
         key_type trace_key(const key_concat& concat) const
@@ -242,10 +278,11 @@ public:
         friend class trie;
 
     public:
-        using iterator_category = std::forward_iterator_tag;
+        using iterator_category = std::bidirectional_iterator_tag;
         using difference_type   = std::ptrdiff_t;
         using value_type        = trie::value_type;
         using pointer           = std::unique_ptr<value_type>;
+        using reference         = value_type;
         
         explicit iterator(node_type* ptr, const key_concat& concat) 
             :  _pointed_node(ptr), _concat(concat) {}
@@ -258,7 +295,7 @@ public:
         iterator& operator=(const iterator&)     = default;
         iterator& operator=(iterator&&) noexcept = default;
 
-        value_type operator* () const 
+        reference operator* () const 
         { 
             return value_type(_pointed_node->trace_key(_concat), _pointed_node->value.value()); 
         }
@@ -281,6 +318,19 @@ public:
             return no_op;
         }
 
+        iterator& operator--()
+        {
+            _pointed_node = _pointed_node->previous_node();
+            return *this;
+        }
+
+        iterator operator--(int)
+        {
+            iterator no_op = *this;
+            --(*this);
+            return no_op;
+        }
+
         friend bool operator==(const iterator& lhs, const iterator& rhs) { return lhs._pointed_node == rhs._pointed_node; }
         friend bool operator!=(const iterator& lhs, const iterator& rhs) { return !(lhs == rhs); }
 
@@ -294,10 +344,11 @@ public:
         friend class trie;
 
     public:
-        using iterator_category = std::forward_iterator_tag;
+        using iterator_category = std::bidirectional_iterator_tag;
         using difference_type   = std::ptrdiff_t;
-        using const_value_type  = std::pair<const trie::key_type, const mapped_type&>;
-        using pointer           = std::unique_ptr<const_value_type>;
+        using value_type        = std::pair<const trie::key_type, const mapped_type&>;
+        using pointer           = std::unique_ptr<value_type>;
+        using reference         = value_type;
 
         explicit const_iterator(const node_type* ptr, const key_concat& concat) 
             : _pointed_node(ptr), _concat(concat) {}
@@ -315,26 +366,39 @@ public:
         const_iterator& operator=(const const_iterator&)     = default;
         const_iterator& operator=(const_iterator&&) noexcept = default;
 
-        const_value_type operator* () const 
+        reference operator* () const 
         { 
-            return const_value_type(_pointed_node->trace_key(_concat), _pointed_node->value.value()); 
+            return value_type(_pointed_node->trace_key(_concat), _pointed_node->value.value()); 
         }
 
-        const pointer operator->() const 
+        pointer operator->() const 
         { 
-            return std::make_unique<const_value_type>(_pointed_node->trace_key(_concat),_pointed_node->value.value()); 
+            return std::make_unique<value_type>(_pointed_node->trace_key(_concat),_pointed_node->value.value()); 
         }
         
-        iterator& operator++()
+        const_iterator& operator++()
         {
             _pointed_node = _pointed_node->next_node();
             return *this;
         }
 
-        iterator operator++(int)
+        const_iterator operator++(int)
         {
-            iterator no_op = *this;
+            const_iterator no_op = *this;
             ++(*this);
+            return no_op;
+        }
+
+        const_iterator& operator--()
+        {
+            _pointed_node = _pointed_node->previous_node();
+            return *this;
+        }
+
+        const_iterator operator--(int)
+        {
+            const_iterator no_op = *this;
+            --(*this);
             return no_op;
         }
 
@@ -346,23 +410,59 @@ public:
         const key_concat& _concat;
     };
 
+    // ITERATORS
     iterator begin() noexcept
     {
         node_type* current_node = &_root;
 
-        while(!current_node->children.empty())
+        while(!current_node->value.has_value())
             current_node = &current_node->children.front();
 
         return (current_node->value.has_value()) ? iterator(current_node, _key_concat) : end();
     }
 
-    const_iterator begin()  const noexcept { return cbegin(); }
+    const_iterator begin()  const noexcept 
+    {
+        const node_type* current_node = &_root;
 
-    iterator       end()          noexcept { return iterator(nullptr, _key_concat); }
-    const_iterator end()    const noexcept { return cend();            }
+        while(!current_node->value.has_value())
+            current_node = &current_node->children.front();
 
-    const_iterator cbegin() const noexcept { return const_iterator(begin());   }
-    const_iterator cend()   const noexcept { return const_iterator(nullptr, _key_concat);   }
+        return (current_node->value.has_value()) ? const_iterator(current_node, _key_concat) : end();
+    }
+
+    iterator       end()          noexcept { return iterator(nullptr, _key_concat);       }
+    const_iterator end()    const noexcept { return const_iterator(nullptr, _key_concat); }
+
+    const_iterator cbegin() const noexcept { return begin(); }
+    const_iterator cend()   const noexcept { return end();   }
+
+    // REVERSE ITERATORS
+    std::reverse_iterator<iterator> rbegin() noexcept
+    {
+        node_type* current_node = &_root;
+
+        while(!current_node->children.empty())
+            current_node = &current_node->children.back();
+
+        return (current_node->value.has_value()) ? std::make_reverse_iterator(iterator(current_node, _key_concat)) : rend();
+    }
+
+    std::reverse_iterator<const_iterator> rbegin() const noexcept 
+    {
+        const node_type* current_node = &_root;
+
+        while(!current_node->children.empty())
+            current_node = &current_node->children.back();
+
+        return (current_node->value.has_value()) ? std::make_reverse_iterator(const_iterator(current_node, _key_concat)) : rend();
+    }    
+
+    std::reverse_iterator<iterator> rend() noexcept { return std::make_reverse_iterator(end()); }
+    std::reverse_iterator<const_iterator> rend() const noexcept { return std::make_reverse_iterator(const_iterator(end())); }
+
+    std::reverse_iterator<const_iterator> crbegin() const noexcept { return rbegin(); }
+    std::reverse_iterator<const_iterator> crend() const noexcept { return rend(); }
 
 private:
     /*************************************** Private Functionality ******************************************/
